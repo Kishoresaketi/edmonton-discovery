@@ -32,7 +32,7 @@ const sessions = new Map();
 const oauthStates = new Map();
 const attempts = new Map();
 let jwksCache = { expires: 0, keys: [] };
-let store = { users: [] };
+let store = { users: [], placeReports: [], placeOverrides: {} };
 let writeQueue = Promise.resolve();
 
 async function loadStore() {
@@ -40,6 +40,7 @@ async function loadStore() {
   try { store = JSON.parse(await fsp.readFile(STORE_FILE, 'utf8')); }
   catch (e) { if (e.code !== 'ENOENT') throw e; store = { users: [] }; }
   if (!store || !Array.isArray(store.users)) store = { users: [] };
+  store.placeReports ||= []; store.placeOverrides ||= {};
   let migrated = false;
   for (const user of store.users) {
     user.savedPlaces ||= []; user.savedEvents ||= [];
@@ -165,6 +166,43 @@ async function routeApi(req, res, url) {
   if (!checkOrigin(req)) return json(res, 403, { error: 'Request origin was not accepted.' });
   if (req.method === 'GET' && url.pathname === '/api/auth-options') return json(res, 200, { google: googleReady(), emailVerification: !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM) });
   if (req.method === 'GET' && url.pathname === '/api/session') { const u = currentUser(req); return json(res, 200, { user: u ? safeUser(u) : null }); }
+  if (req.method === 'GET' && url.pathname === '/api/place-details') return json(res, 200, { overrides: store.placeOverrides });
+  if (req.method === 'POST' && url.pathname === '/api/place-reports') {
+    if (rateLimited(req, 'place-report', 6)) return json(res, 429, { error:'Too many suggestions. Please wait and try again.' });
+    const input = await body(req), placeId = Number(input.placeId), field = String(input.field || '').slice(0, 40), note = String(input.note || '').trim();
+    if (!Number.isInteger(placeId) || placeId < 0 || placeId > 10000 || !['Address','Opening hours','Website','Menu','Business status','Other'].includes(field) || note.length < 8 || note.length > 1000) return json(res, 400, { error:'Choose a detail and add a note between 8 and 1,000 characters.' });
+    const report = { id:crypto.randomUUID(), placeId, placeName:String(input.placeName || '').slice(0,120), field, note, createdAt:new Date().toISOString(), status:'pending' };
+    store.placeReports.unshift(report); store.placeReports = store.placeReports.slice(0, 5000); await persist();
+    return json(res, 201, { message:'Thanks. Your suggestion is in the review queue.' });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/place-reports') {
+    const expected = process.env.REPORTS_ADMIN_TOKEN || '', supplied = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const a = Buffer.from(expected), b = Buffer.from(supplied);
+    if (!expected) return json(res, 503, { error:'The site editor has not configured review access yet.' });
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return json(res, 401, { error:'Editor access key was not accepted.' });
+    return json(res, 200, { reports:store.placeReports, overrides:store.placeOverrides });
+  }
+  if (req.method === 'PATCH' && url.pathname.startsWith('/api/place-reports/')) {
+    const expected = process.env.REPORTS_ADMIN_TOKEN || '', supplied = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const a = Buffer.from(expected), b = Buffer.from(supplied);
+    if (!expected) return json(res, 503, { error:'The site editor has not configured review access yet.' });
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return json(res, 401, { error:'Editor access key was not accepted.' });
+    const report = store.placeReports.find(item => item.id === decodeURIComponent(url.pathname.slice('/api/place-reports/'.length)));
+    if (!report) return json(res, 404, { error:'Suggestion not found.' });
+    const input = await body(req), status = String(input.status || 'reviewed');
+    if (!['reviewed','resolved','declined'].includes(status)) return json(res, 400, { error:'Choose a valid review status.' });
+    const reviewedAt = new Date().toISOString();
+    if (status === 'resolved') {
+      const fields = ['address','hours','website','menuUrl','businessStatus'];
+      const correction = {};
+      for (const key of fields) { const value = String(input[key] || '').trim().slice(0, 500); if (value) correction[key] = value; }
+      if (!Object.keys(correction).length) return json(res, 400, { error:'Add at least one verified correction before publishing.' });
+      for (const key of ['website','menuUrl']) if (correction[key]) { let parsed; try { parsed = new URL(correction[key]); } catch {} if (!parsed || !['http:','https:'].includes(parsed.protocol)) return json(res, 400, { error:'Website and menu links must use http or https.' }); }
+      store.placeOverrides[report.placeId] = { ...(store.placeOverrides[report.placeId] || {}), ...correction, verifiedAt:reviewedAt };
+    }
+    report.status = status; report.reviewedAt = reviewedAt;
+    await persist(); return json(res, 200, { report, overrides:store.placeOverrides });
+  }
   if (req.method === 'POST' && url.pathname === '/api/signup') {
     if (rateLimited(req, 'signup')) return json(res, 429, { error: 'Too many attempts. Please wait and try again.' });
     const input = await body(req), name = String(input.name || '').trim().slice(0, 80), email = String(input.email || '').trim().toLowerCase(), password = String(input.password || '');

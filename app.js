@@ -3,6 +3,7 @@
       "use strict";
       var $ = function (s) { return document.querySelector(s); };
       var PAGE = 60;
+      var placeOverrides = {};
 
       var PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
       var CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
@@ -45,6 +46,7 @@
           addrRaw: d[2] || "",
           hood: d[3] || "",
           lat: d[4], lon: d[5],
+          online: (typeof ONLINE_PLACE_DETAILS !== "undefined" && ONLINE_PLACE_DETAILS[i]) || null,
           search: (d[0] + " " + (d[2] || "") + " " + (d[3] || "") + " " + d[1]).toLowerCase()
         };
       });
@@ -167,6 +169,9 @@
         else q = encodeURIComponent(r.name + " " + realAddr(r.addrRaw) + " " + (r.hood || "") + " Edmonton AB");
         return "https://www.google.com/maps/search/?api=1&query=" + q;
       }
+      function restaurantQuery(r) {
+        return [r.name, realAddr(r.addrRaw), r.hood, "Edmonton Alberta"].filter(Boolean).join(" ");
+      }
       function openDetail(r) {
         cur = r;
         var tag = $("#dTag");
@@ -174,8 +179,18 @@
         tag.className = "tag " + tagCls(r.type);
         $("#dName").textContent = r.name;
         $("#dHood").textContent = r.hood ? r.hood + " · Edmonton, Alberta" : "Edmonton, Alberta";
-        $("#dAddr").textContent = r.addr || "Address not listed in the licence record";
+        var verified = placeOverrides[r.i] || {}, online = r.online || {};
+        $("#dAddr").textContent = verified.address || r.addr || "Address not listed in the licence record";
         $("#dDir").href = directionsURL(r);
+        var query = restaurantQuery(r);
+        $("#dHours").href = directionsURL(r);
+        $("#dHours").querySelector("small").textContent = verified.hours ? "Verified listing: " + verified.hours : online.hoursText || "Check today’s hours on Google Maps";
+        $("#dMenu").href = verified.menuUrl || online.menuUrl || "https://www.google.com/search?q=" + encodeURIComponent(query + " menu");
+        $("#dMenu").querySelector("small").textContent = online.menuSource && !verified.menuUrl ? "Delivery menu · " + online.menuSource : "Open the latest menu details";
+        $("#dWebsite").href = verified.website || online.website || "https://www.google.com/search?q=" + encodeURIComponent(query + " official website");
+        $("#dWebsite").querySelector("small").textContent = verified.website || online.website ? "Restaurant website" : "Search for the official website";
+        var sourceNote = online.sourceUrl ? 'Online listing: <a href="' + esc(online.sourceUrl) + '" target="_blank" rel="noopener">' + esc(online.sourceName) + '</a>. Delivery hours can differ from dine-in hours.' : "Hours and menus can change. Please confirm details with the restaurant before heading out.";
+        $("#placeInfoNote").innerHTML = (verified.businessStatus ? "Verified business status: " + esc(verified.businessStatus) + ". " : "") + sourceNote;
         updateSaveButton(r);
         var wrap = $("#mapWrap"), map = $("#dMap");
         if (r.lat != null && r.lon != null) {
@@ -279,10 +294,45 @@
       var pendingPlan = null, pendingSaveId = null, pendingEventKey = null, currentUser = null, savedPlaceIds = [], authMode = "signup", toastTimer = null;
       async function api(path, options) {
         var response = await fetch(path, Object.assign({ credentials:"same-origin", headers:{"Content-Type":"application/json"} }, options || {}));
-        var result = await response.json();
+        var result;
+        try { result = await response.json(); } catch (e) { throw new Error("This page is not connected to the review server. The site owner needs to deploy the app backend first."); }
         if (!response.ok) { var error = new Error(result.error || "Something went wrong."); error.details = result; throw error; }
         return result;
       }
+      var reportForm = $("#placeReportForm"), reportMessage = $("#reportMessage"), reviewToken = $("#reviewToken"), reviewList = $("#reviewList");
+      reportForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        if (!cur) return;
+        if (!authOptions.api) { reportMessage.textContent = "Suggestions can be shared after the site owner connects the review server."; return; }
+        reportMessage.textContent = "Sending your suggestion…";
+        try {
+          var answer = await api("/api/place-reports", { method:"POST", body:JSON.stringify({ placeId:cur.i, placeName:cur.name, field:$("#reportField").value, note:$("#reportNote").value }) });
+          reportMessage.textContent = answer.message; reportForm.reset();
+        } catch (error) { reportMessage.textContent = error.message || "Could not send this suggestion. Please try again."; }
+      });
+      function renderReviewReports(reports) {
+        reviewList.innerHTML = reports.length ? reports.map(function (report) {
+          return '<article class="review-item" data-report="' + esc(report.id) + '"><strong>' + esc(report.placeName) + ' · ' + esc(report.field) + '</strong><span>' + esc(report.note) + '</span><small>' + esc(new Date(report.createdAt).toLocaleString()) + ' · ' + esc(report.status) + '</small>' +
+            '<label>Verified address (optional)<input data-correction="address" value="' + esc((placeOverrides[report.placeId] || {}).address || "") + '"></label><label>Verified hours (optional)<input data-correction="hours" value="' + esc((placeOverrides[report.placeId] || {}).hours || "") + '"></label><label>Website URL (optional)<input data-correction="website" value="' + esc((placeOverrides[report.placeId] || {}).website || "") + '"></label><label>Menu URL (optional)<input data-correction="menuUrl" value="' + esc((placeOverrides[report.placeId] || {}).menuUrl || "") + '"></label><label>Business status (optional)<input data-correction="businessStatus" value="' + esc((placeOverrides[report.placeId] || {}).businessStatus || "") + '"></label><div class="review-actions"><button class="btn secondary" data-review="reviewed" type="button">Mark reviewed</button><button class="btn primary" data-review="resolved" type="button">Verify &amp; publish</button><button class="btn secondary" data-review="declined" type="button">Decline</button></div></article>';
+        }).join("") : '<p class="report-message">No suggestions in the queue.</p>';
+      }
+      $("#loadReports").addEventListener("click", async function () {
+        reviewList.textContent = "Loading suggestions…";
+        try {
+          var result = await api("/api/place-reports", { headers:{"Authorization":"Bearer " + reviewToken.value} });
+          placeOverrides = result.overrides || {}; renderReviewReports(result.reports || []);
+        } catch (error) { reviewList.textContent = error.message || "Could not load suggestions."; }
+      });
+      reviewList.addEventListener("click", async function (event) {
+        var button = event.target.closest("[data-review]"), card = event.target.closest("[data-report]");
+        if (!button || !card) return;
+        var correction = {}; card.querySelectorAll("[data-correction]").forEach(function (input) { correction[input.getAttribute("data-correction")] = input.value; });
+        button.disabled = true;
+        try {
+          await api("/api/place-reports/" + encodeURIComponent(card.getAttribute("data-report")), { method:"PATCH", headers:{"Authorization":"Bearer " + reviewToken.value}, body:JSON.stringify(Object.assign({ status:button.getAttribute("data-review") }, correction)) });
+          $("#loadReports").click();
+        } catch (error) { button.disabled = false; window.alert(error.message || "Could not update this suggestion."); }
+      });
       function showToast(message) {
         var toast = $("#demoToast"); toast.textContent = message; toast.classList.add("visible");
         clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove("visible"); }, 4200);
@@ -427,6 +477,15 @@
         $("#seedDate").textContent = MONFULL[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
       })();
       renderDining();
+      fetch("/api/place-details").then(function (response) { return response.ok ? response.json() : null; }).then(function (result) {
+        if (!result || !result.overrides) return;
+        placeOverrides = result.overrides;
+        Object.keys(placeOverrides).forEach(function (id) {
+          var row = byIndex[id], info = placeOverrides[id];
+          if (row && info.address) row.addr = info.address;
+        });
+        renderDining();
+      }).catch(function () {});
       var m = /#place-(\d+)/.exec(location.hash || "");
       if (m && byIndex[m[1]]) openDetail(byIndex[m[1]]);
     })();

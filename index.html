@@ -163,6 +163,37 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
         <span id="dAddr"></span>
       </p>
+      <section class="place-info" aria-label="Restaurant information">
+        <h3>Plan your visit</h3>
+        <div class="place-info-grid">
+          <a class="place-info-card hours-card" id="dHours" href="#" target="_blank" rel="noopener">
+            <span class="info-icon" aria-hidden="true">◷</span><span><strong>Hours &amp; open status</strong><small>Check today’s hours on Google Maps</small></span><span class="info-arrow" aria-hidden="true">↗</span>
+          </a>
+          <a class="place-info-card menu-card" id="dMenu" href="#" target="_blank" rel="noopener">
+            <span class="info-icon" aria-hidden="true">♨</span><span><strong>Find the menu</strong><small>Search for the latest menu</small></span><span class="info-arrow" aria-hidden="true">↗</span>
+          </a>
+          <a class="place-info-card website-card" id="dWebsite" href="#" target="_blank" rel="noopener">
+            <span class="info-icon" aria-hidden="true">↗</span><span><strong>Restaurant website</strong><small>Find the official website</small></span><span class="info-arrow" aria-hidden="true">↗</span>
+          </a>
+        </div>
+        <p class="place-info-note" id="placeInfoNote">Hours and menus can change. Please confirm details with the restaurant before heading out.</p>
+      </section>
+      <details class="report-box" id="reportBox">
+        <summary>See something incorrect? Suggest an update</summary>
+        <form id="placeReportForm" class="report-form">
+          <label for="reportField">What needs a correction?</label>
+          <select id="reportField" required><option value="">Choose a detail</option><option>Address</option><option>Opening hours</option><option>Website</option><option>Menu</option><option>Business status</option><option>Other</option></select>
+          <label for="reportNote">What should we check?</label>
+          <textarea id="reportNote" rows="3" maxlength="1000" required placeholder="Tell us what looks wrong and, if you know it, the correct information."></textarea>
+          <button class="btn primary" type="submit">Send suggestion</button>
+          <p id="reportMessage" class="report-message" aria-live="polite"></p>
+        </form>
+      </details>
+      <details class="review-admin" id="reviewAdmin">
+        <summary>Site editor: review suggestions</summary>
+        <div class="review-controls"><label for="reviewToken">Editor access key</label><input id="reviewToken" type="password" autocomplete="off"><button class="btn secondary" id="loadReports" type="button">Load reports</button></div>
+        <div id="reviewList" class="review-list" aria-live="polite"></div>
+      </details>
       <div class="mapwrap" id="mapWrap" hidden><iframe id="dMap" title="Map of this location" loading="lazy"></iframe></div>
       <div class="dactions">
         <a class="btn primary" id="dDir" href="#" target="_blank" rel="noopener">
@@ -171,7 +202,7 @@
         </a>
         <button class="btn secondary" id="savePlace" type="button">♡ Save place</button>
       </div>
-      <p class="dsrc">From the City of Edmonton business licence records — the open data doesn't publish phone numbers or hours for these listings.</p>
+      <p class="dsrc">Address and neighbourhood are from City of Edmonton business licence records. Links open current third-party search results because the city directory does not publish restaurant menus, websites, or opening hours.</p>
     </section>
 
 

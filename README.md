@@ -7,12 +7,15 @@ An Edmonton-first dining and events explorer built from City of Edmonton open da
 - 2,987 dining listings across 313 Edmonton neighbourhoods
 - Upcoming public events with event-page links where available
 - Responsive discovery UI, search, neighbourhood filters, place details, and map directions
+- Restaurant detail cards with sourced online information and a visitor correction workflow
 - Optional account server for signup, email verification, Google sign-in, saved places, and saved events
 - One free Edmonton Member account; no paid subscription or checkout
 
 ## GitHub Pages deployment
 
 GitHub Pages serves the static files in this repository, so browsing, search, filters, events, and place details work there. Pages does **not** run `server.js`. The page detects this and disables account actions clearly until a backend is deployed; it does not pretend signup or email verification succeeded.
+
+Set a long random `REPORTS_ADMIN_TOKEN` in the server environment to enable the in-app review queue. Suggestions are saved for review, and the site editor panel can verify and publish corrected address, hours, website, and menu details. GitHub Pages cannot run this backend; on the static page, the report form opens a prefilled GitHub issue draft instead. Visitors need to sign in to GitHub and submit that draft. Deploy the backend and connect the site to it for in-app review and publishing.
 
 To enable accounts on the live site, deploy the included Node server to an application host and connect the website to it using a same-site custom domain/reverse proxy. Configure HTTPS, provider credentials, persistent storage and sessions, and CORS/CSRF policy for that deployment before enabling account actions. Do not point the public site at the local development server.
 
