@@ -1,45 +1,61 @@
 # Edmonton Discovery
 
-A District-style dining and events explorer for Edmonton, built from City of Edmonton open data.
+An Edmonton-first dining and events explorer built from City of Edmonton open data. Discovery is free for everyone while the community grows.
 
-## What's inside
+## What's included
 
-- **2,987 dining listings** across 313 Edmonton neighbourhoods (searchable)
-- **51 upcoming events** grouped by month
-- Single self-contained `index.html` — no build step, no server needed
+- 2,987 dining listings across 313 Edmonton neighbourhoods
+- Upcoming public events with event-page links where available
+- Responsive discovery UI, search, neighbourhood filters, place details, and map directions
+- Optional account server for signup, email verification, Google sign-in, saved places, and saved events
+- One free Edmonton Member account; no paid subscription or checkout
 
-## View it
+## GitHub Pages deployment
 
-Open `index.html` in any browser, or enable GitHub Pages on this repo for a live link.
+GitHub Pages serves the static files in this repository, so browsing, search, filters, events, and place details work there. Pages does **not** run `server.js`. The page detects this and disables account actions clearly until a backend is deployed; it does not pretend signup or email verification succeeded.
+
+To enable accounts on the live site, deploy the included Node server to an application host and connect the website to it using a same-site custom domain/reverse proxy. Configure HTTPS, provider credentials, persistent storage and sessions, and CORS/CSRF policy for that deployment before enabling account actions. Do not point the public site at the local development server.
+
+## Run the full app locally
+
+Requires Node.js 20 or newer. From this folder, run:
+
+```sh
+npm start
+```
+
+Then open <http://127.0.0.1:4173>.
+
+## Configure email verification and Google sign-in
+
+Copy `.env.example` to `.env` and fill in the values locally. Never commit `.env` or share its secrets in chat.
+
+- Email verification uses a verified Resend sender (`RESEND_API_KEY`, `EMAIL_FROM`). New email/password accounts cannot log in until they verify.
+- Google sign-in uses a Google OAuth Web application (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`). Register the exact callback `http://localhost:4173/auth/google/callback` for local development.
+- `APP_BASE_URL` must match the app's public HTTPS origin when deployed.
+
+The app reports when either provider is not configured; it does not claim an email was sent or a Google sign-in completed without the provider credentials.
+
+## Security notes
+
+Passwords are stored as salted one-way scrypt hashes; raw passwords are never written to the data store. New hashes use scrypt N=2^17, r=8, p=1. Legacy hashes are upgraded after successful login. Verification tokens are single-use, expire after 24 hours, and are stored as hashes. Google uses the server-side authorization-code flow with state, nonce, PKCE, and ID-token signature and claim checks. Sessions use random HttpOnly, SameSite cookies.
+
+Existing accounts created before verification was implemented can continue to sign in but are marked unverified; they can request verification when email delivery is configured. New email/password accounts must verify before login. Google sign-in verifies Google's email claim.
+
+The local server binds to loopback and is for prototyping. Before public launch, add a production database, durable sessions, HTTPS, account recovery, distributed rate limiting, monitoring, privacy/legal review, and an independent security review. A server operator can change application code; hashing protects stored password data but cannot technically prevent a malicious operator from changing code to capture passwords. For that trust boundary, use a reputable identity provider to handle passwords.
+
+## Marketplace integrations still needed
+
+Live table availability and confirmed reservations require restaurant booking integrations. Ticket inventory, checkout, refunds, and transfer rules require event organizer or ticketing-provider integrations. The public directory cannot confirm current hours, availability, or ticket stock; event listings link to official information where the source provides a URL.
 
 ## Data source
 
-City of Edmonton open data portal. Dining data comes from business licence records (no phone/hours available in the source data).
+City of Edmonton Open Data. Dining listings come from business licence records, which do not publish phone numbers or hours.
 
 ## Updating the data
 
-The app is a single self-contained `index.html` with the data baked in. To refresh it with the latest restaurants and events:
+Dining data: `data.edmonton.ca/resource/qhi4-bdpu.json`. Events: `data.edmonton.ca/resource/64u3-c7bh.json`. The records are in `data.js`; update the `DINING`, `EVENTS`, and `SEED_DATE` constants. Data in this repo was seeded in October 2026.
 
-1. **Pull fresh data** — download the latest from Edmonton's open data:
-   - Dining: business licence records at `data.edmonton.ca/resource/qhi4-bdpu.json` (filter for restaurant and food truck categories)
-   - Events: `data.edmonton.ca/resource/64u3-c7bh.json` (upcoming events, ordered by date)
-2. **Rebuild the data block** — format the fresh data as a JavaScript block:
-   ```js
-   const DINING=[...];
-   const EVENTS=[...];
-   const SEED_DATE="YYYY-MM-DD";
-   ```
-   Each dining entry is `[name, type, address, neighbourhood, latitude, longitude]`. Each event entry has `t` (title), `b` (date), `st`/`et` (start/end time), `type`, `v` (venue), `hood` (neighbourhood), `link`.
-3. **Swap it into index.html** — replace the existing data section (the block starting at `const DINING=` through the `SEED_DATE` line) with the new block. Everything else in the file stays untouched.
-4. **Push** — commit and push the updated `index.html`:
-   ```
-   git add index.html
-   git commit -m "Refresh data YYYY-MM-DD"
-   git push origin main
-   ```
-   If GitHub Pages is enabled, the live site updates automatically.
+## Live page
 
-## Built
-
-October 2026
-## Page is live at: https://kishoresaketi.github.io/edmonton-discovery/
+https://kishoresaketi.github.io/edmonton-discovery/
