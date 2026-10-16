@@ -10,15 +10,15 @@ Requires Node.js 20 or newer. From this folder, run `npm start`, then open <http
 
 Vercel serves the website from this repository. Firebase Authentication and Cloud Firestore provide the account and data backend; Firebase Auth handles password storage and email verification, and this app never stores passwords. The local Node server is only for local development and is excluded from Vercel deployments.
 
-1. Create a Firebase project on the **Spark** (no-cost) plan. Choose a Firestore location close to Edmonton (for example, `northamerica-northeast1`); Firestore’s location cannot be changed later.
-2. In **Authentication → Sign-in method**, enable **Email/Password** and **Google**. In **Authentication → Settings → Authorized domains**, add the Vercel domain after the first deployment and any custom domain you use.
-3. Create the Firestore database in production mode.
-4. Register a web app in **Project settings → Your apps**. Copy its web configuration into `firebase-config.js` (`apiKey`, `authDomain`, `projectId`, and `appId`). This web configuration is public by design; never put a service-account key or admin credential in the website.
+1. The Firebase project `edmonton-discovery` is on the **Spark** (no-cost) plan. Firestore is in `northamerica-northeast1` (Montréal); this location cannot be changed later.
+2. **Authentication → Sign-in method** has **Email/Password** and **Google** enabled. The Google sign-in support email is the project owner's Gmail address and is visible to users. **Authentication → Settings → Authorized domains** includes `edmonton-discovery.vercel.app`.
+3. The Firestore database is in production mode. Its security rules are in `firestore.rules` and must remain synchronized with the published rules in Firebase Console.
+4. The public web configuration is in `firebase-config.js` (`apiKey`, `authDomain`, `projectId`, and `appId`). Firebase web configuration is public by design; never put a service-account key or admin credential in the website.
 5. Import `KishoreSaketi/edmonton-discovery` from the Vercel dashboard. Use the repository root, **Other** framework preset, no build command, and `.` as the output directory. The checked-in `vercel.json` configures this static deployment and response headers.
-6. After adding the Vercel domain under Firebase Authentication’s **Authorized domains**, deploy the Firestore rules from this folder with the Firebase CLI: `firebase deploy --only firestore:rules --project YOUR_PROJECT_ID`.
-7. To activate the listing editor, create the first account, copy its UID from **Authentication → Users**, then create `admins/{UID}` in Firestore with `{ "role": "admin" }`. Admin membership is granted by this document and cannot be self-assigned from the site.
+6. To update Firestore rules, publish `firestore.rules` from the Firebase Console or use the Firebase CLI: `firebase deploy --only firestore:rules --project edmonton-discovery`.
+7. To activate the listing editor, create/sign into the owner account, copy its UID from **Authentication → Users**, then create `admins/{UID}` in Firestore with `{ "role": "admin" }`. Admin membership is granted by this document and cannot be self-assigned from the site.
 
-The app’s Firebase web config is intentionally blank until project setup. With a valid config, authentication, verified-email gating, saved places/events, public verified corrections, and editor-only review use Firebase. User-submitted corrections remain private to the editor. If you switch from the old local Node backend, existing local accounts cannot be migrated with their passwords; users create new Firebase accounts.
+With the configured Firebase project, authentication, verified-email gating, saved places/events, public verified corrections, and editor-only review use Firebase. User-submitted corrections remain private to the editor. If you switch from the old local Node backend, existing local accounts cannot be migrated with their passwords; users create new Firebase accounts.
 
 Firebase Spark has usage limits and may stop serving requests when quotas are exceeded. Vercel’s free Hobby plan is limited to personal, non-commercial use; this marketplace will need a Vercel Pro or other eligible plan for commercial operation. Do not enter billing details or start a paid plan without reviewing the current price and usage settings.
 
