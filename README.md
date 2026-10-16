@@ -42,3 +42,4 @@ The app is a single self-contained `index.html` with the data baked in. To refre
 ## Built
 
 October 2026
+## Page is live at: https://kishoresaketi.github.io/edmonton-discovery/
