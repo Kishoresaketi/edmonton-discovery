@@ -172,6 +172,9 @@
       function restaurantQuery(r) {
         return [r.name, realAddr(r.addrRaw), r.hood, "Edmonton Alberta"].filter(Boolean).join(" ");
       }
+      function businessProfileURL(r) {
+        return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(restaurantQuery(r));
+      }
       function openDetail(r) {
         cur = r;
         var tag = $("#dTag");
@@ -182,14 +185,15 @@
         var verified = placeOverrides[r.i] || {}, online = r.online || {};
         $("#dAddr").textContent = verified.address || r.addr || "Address not listed in the licence record";
         $("#dDir").href = directionsURL(r);
-        var query = restaurantQuery(r);
         $("#dHours").href = directionsURL(r);
         $("#dHours").querySelector("small").textContent = verified.hours ? "Verified listing: " + verified.hours : online.hoursText || "Check today’s hours on Google Maps";
-        $("#dMenu").href = verified.menuUrl || online.menuUrl || "https://www.google.com/search?q=" + encodeURIComponent(query + " menu");
-        $("#dMenu").querySelector("small").textContent = online.menuSource && !verified.menuUrl ? "Delivery menu · " + online.menuSource : "Open the latest menu details";
-        $("#dWebsite").href = verified.website || online.website || "https://www.google.com/search?q=" + encodeURIComponent(query + " official website");
-        $("#dWebsite").querySelector("small").textContent = verified.website || online.website ? "Restaurant website" : "Search for the official website";
-        var sourceNote = online.sourceUrl ? 'Online listing: <a href="' + esc(online.sourceUrl) + '" target="_blank" rel="noopener">' + esc(online.sourceName) + '</a>. Delivery hours can differ from dine-in hours.' : "Hours and menus can change. Please confirm details with the restaurant before heading out.";
+        $("#dMenu").href = verified.menuUrl || online.menuUrl || businessProfileURL(r);
+        $("#dMenu").querySelector("strong").textContent = verified.menuUrl || online.menuUrl ? "Menu & ordering" : "Menu on business profile";
+        $("#dMenu").querySelector("small").textContent = verified.menuUrl ? "Verified menu link" : online.menuSource ? "Menu on " + online.menuSource : "Check this location’s menu, if listed";
+        $("#dWebsite").href = verified.website || online.website || businessProfileURL(r);
+        $("#dWebsite").querySelector("strong").textContent = verified.website || online.website ? "Official website" : "Website & details";
+        $("#dWebsite").querySelector("small").textContent = verified.website || online.website ? "Matched to this location" : "Open this location’s business profile";
+        var sourceNote = online.sourceUrl ? 'Source: <a href="' + esc(online.sourceUrl) + '" target="_blank" rel="noopener">' + esc(online.sourceName) + '</a>. ' + esc(online.sourceNote || "Confirm current details with the restaurant.") : "Hours and menus can change. Please confirm details with the restaurant before heading out.";
         $("#placeInfoNote").innerHTML = (verified.businessStatus ? "Verified business status: " + esc(verified.businessStatus) + ". " : "") + sourceNote;
         updateSaveButton(r);
         var wrap = $("#mapWrap"), map = $("#dMap");
@@ -293,6 +297,7 @@
       var verificationPanel = $("#verificationPanel"), googleLogin = $("#googleLogin"), verifyExisting = $("#verifyExisting"), authOptions = { api:false, google:false, emailVerification:false };
       var pendingPlan = null, pendingSaveId = null, pendingEventKey = null, currentUser = null, savedPlaceIds = [], authMode = "signup", toastTimer = null;
       async function api(path, options) {
+        if (window.edmontonFirebase && window.edmontonFirebase.ready) return window.edmontonFirebase.request(path, options || {});
         var response = await fetch(path, Object.assign({ credentials:"same-origin", headers:{"Content-Type":"application/json"} }, options || {}));
         var result;
         try { result = await response.json(); } catch (e) { throw new Error("This page is not connected to the review server. The site owner needs to deploy the app backend first."); }
@@ -303,7 +308,18 @@
       reportForm.addEventListener("submit", async function (event) {
         event.preventDefault();
         if (!cur) return;
-        if (!authOptions.api) { reportMessage.textContent = "Suggestions can be shared after the site owner connects the review server."; return; }
+        if (window.edmontonFirebase && window.edmontonFirebase.ready && (!currentUser || currentUser.needsVerification)) {
+          reportMessage.textContent = "Sign in with a verified account to send a suggestion.";
+          openAccountModal("signup"); return;
+        }
+        if (!authOptions.api) {
+          var field = $("#reportField").value, note = $("#reportNote").value.trim();
+          var issueTitle = "Listing correction: " + cur.name + " — " + field;
+          var issueBody = "Place ID: " + cur.i + "\n\nRestaurant: " + cur.name + "\n\nDetail to check: " + field + "\n\nSuggestion: " + note + "\n\nPlease verify before editing the listing.";
+          window.open("https://github.com/KishoreSaketi/edmonton-discovery/issues/new?" + new URLSearchParams({ title:issueTitle, body:issueBody }).toString(), "_blank", "noopener");
+          reportMessage.textContent = "This static page opened a GitHub report draft. Sign in there and submit it so the site owner can review it.";
+          return;
+        }
         reportMessage.textContent = "Sending your suggestion…";
         try {
           var answer = await api("/api/place-reports", { method:"POST", body:JSON.stringify({ placeId:cur.i, placeName:cur.name, field:$("#reportField").value, note:$("#reportNote").value }) });
@@ -377,9 +393,12 @@
           currentUser = results[0].user; savedPlaceIds = currentUser ? currentUser.savedPlaces || [] : []; savedEventKeys = currentUser ? currentUser.savedEvents || [] : []; authOptions = Object.assign({api:true}, results[1]);
         } catch (e) { currentUser = null; savedPlaceIds = []; savedEventKeys = []; authOptions = {api:false, google:false, emailVerification:false}; }
         googleLogin.classList.toggle("disabled", !authOptions.google); googleLogin.setAttribute("aria-disabled", authOptions.google ? "false" : "true");
+        var firebaseMode = !!(window.edmontonFirebase && window.edmontonFirebase.ready);
+        document.querySelectorAll(".review-token-required").forEach(function (node) { node.hidden = firebaseMode; });
+        $("#reviewAdmin").hidden = firebaseMode ? !(currentUser && currentUser.isAdmin) : !authOptions.api;
         $("#googleLoginText").textContent = authOptions.google ? "Continue with Google" : "Google sign-in · setup required";
         $("#googleStatus").textContent = authOptions.google ? "Use your Google account securely. We only request your basic profile and email." : "Google sign-in is ready to connect when the site owner adds OAuth credentials.";
-        $("#accountNotice").textContent = authOptions.emailVerification ? "Use a unique password you do not use elsewhere. Passwords are one-way hashed on the server." : "Email verification is required. The site owner must configure email delivery before new email accounts can be verified.";
+        $("#accountNotice").textContent = firebaseMode ? "Use a unique password. Google Firebase handles sign-in and verification; this app never stores your password." : (authOptions.emailVerification ? "Use a unique password you do not use elsewhere. Passwords are one-way hashed on the server." : "Email verification is required. The site owner must configure email delivery before new email accounts can be verified.");
         renderAccount(); if (cur) updateSaveButton(cur); renderEvents();
         if (location.search.indexOf("verified=1") !== -1 || location.search.indexOf("signedin=google") !== -1) {
           showToast(location.search.indexOf("verified=1") !== -1 ? "Email verified. You’re signed in." : "Signed in with Google.");
@@ -400,7 +419,13 @@
       }
       $("#openPlans").addEventListener("click", function () { closeModals(); plansBackdrop.hidden = false; });
       openAccount.addEventListener("click", function () { verificationPanel.hidden = true; openAccountModal(); });
-      googleLogin.addEventListener("click", function (e) { if (!authOptions.google) { e.preventDefault(); showToast("Google sign-in is not configured yet. The site owner must add OAuth credentials."); } });
+      googleLogin.addEventListener("click", async function (e) {
+        if (window.edmontonFirebase && window.edmontonFirebase.ready) {
+          e.preventDefault();
+          try { await window.edmontonFirebase.signInGoogle(); await refreshSession(); closeModals(); showToast("You’re signed in with Google."); }
+          catch (error) { accountMessage.textContent = error.message; accountMessage.classList.add("error"); }
+        } else if (!authOptions.google) { e.preventDefault(); showToast("Google sign-in is not configured yet. The site owner must finish the account setup."); }
+      });
       $("#authSignup").addEventListener("click", function () { setAuthMode("signup"); });
       $("#authLogin").addEventListener("click", function () { setAuthMode("login"); });
       document.querySelectorAll("[data-close-modal]").forEach(function (b) { b.addEventListener("click", closeModals); });
@@ -456,10 +481,10 @@
         try { await api("/api/logout", { method:"POST", body:"{}" }); } catch (e) {}
         currentUser = null; savedPlaceIds = []; savedEventKeys = []; renderEvents(); closeModals(); renderAccount(); showToast("You’re signed out.");
       });
-      $("#savePlace").addEventListener("click", function () { if (!authOptions.api) { showToast("Saved places are unavailable on this static page until its account server is connected."); return; } if (cur) toggleSavedPlace(cur.i); });
+      $("#savePlace").addEventListener("click", function () { if (!authOptions.api) { showToast("Saved places will be available when account setup is complete."); return; } if (cur) toggleSavedPlace(cur.i); });
       $("#evList").addEventListener("click", async function (e) {
         var button = e.target.closest("[data-event-key]"); if (!button) return;
-        if (!authOptions.api) { showToast("Saved events are unavailable on this static page until its account server is connected."); return; }
+        if (!authOptions.api) { showToast("Saved events will be available when account setup is complete."); return; }
         var key; try { key = decodeURIComponent(button.getAttribute("data-event-key")); } catch (err) { return; }
         if (!currentUser) { pendingEventKey = key; openAccountModal("signup"); accountMessage.textContent = "Create a free account to save this event."; return; }
         try {
@@ -477,7 +502,7 @@
         $("#seedDate").textContent = MONFULL[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
       })();
       renderDining();
-      fetch("/api/place-details").then(function (response) { return response.ok ? response.json() : null; }).then(function (result) {
+      api("/api/place-details").then(function (result) {
         if (!result || !result.overrides) return;
         placeOverrides = result.overrides;
         Object.keys(placeOverrides).forEach(function (id) {

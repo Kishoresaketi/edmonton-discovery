@@ -1,64 +1,54 @@
 # Edmonton Discovery
 
-An Edmonton-first dining and events explorer built from City of Edmonton open data. Discovery is free for everyone while the community grows.
+An Edmonton-first dining and event discovery app. Browsing and the Edmonton Member account are free for everyone while the product grows.
 
-## What's included
+## Run locally
 
-- 2,987 dining listings across 313 Edmonton neighbourhoods
-- Upcoming public events with event-page links where available
-- Responsive discovery UI, search, neighbourhood filters, place details, and map directions
-- Restaurant detail cards with sourced online information and a visitor correction workflow
-- Optional account server for signup, email verification, Google sign-in, saved places, and saved events
-- One free Edmonton Member account; no paid subscription or checkout
+Requires Node.js 20 or newer. From this folder, run `npm start`, then open <http://127.0.0.1:4173>.
 
-## GitHub Pages deployment
+## Production backend (Firebase Spark)
 
-GitHub Pages serves the static files in this repository, so browsing, search, filters, events, and place details work there. Pages does **not** run `server.js`. The page detects this and disables account actions clearly until a backend is deployed; it does not pretend signup or email verification succeeded.
+The static GitHub Pages copy does not run the Node server in this repository. For a hosted version with real sign-up, Google sign-in, saved lists, and correction review, use Firebase Authentication + Cloud Firestore + Firebase Hosting. Firebase Auth handles password storage and email verification; this app never receives or stores password hashes. Keep Firebase Security Rules deployed before sharing the site.
 
-Set a long random `REPORTS_ADMIN_TOKEN` in the server environment to enable the in-app review queue. Suggestions are saved for review, and the site editor panel can verify and publish corrected address, hours, website, and menu details. GitHub Pages cannot run this backend; on the static page, the report form opens a prefilled GitHub issue draft instead. Visitors need to sign in to GitHub and submit that draft. Deploy the backend and connect the site to it for in-app review and publishing.
+1. Create a Firebase project on the **Spark** (no-cost) plan. Choose a Firestore location close to Edmonton (for example, `northamerica-northeast1`); Firestore’s location cannot be changed later.
+2. In **Authentication → Sign-in method**, enable **Email/Password** and **Google**. In **Authentication → Settings → Authorized domains**, add the Firebase Hosting domain and any custom domain you use.
+3. Create the Firestore database in production mode.
+4. Register a web app in **Project settings → Your apps**. Copy its web configuration into `firebase-config.js` (`apiKey`, `authDomain`, `projectId`, and `appId`). This web configuration is public by design; never put a service-account key or admin credential in the website.
+5. From this folder, install the Firebase CLI if needed (`npm install --global firebase-tools`), sign in (`firebase login`), and deploy hosting and the included Firestore rules: `firebase deploy --only hosting,firestore:rules --project YOUR_PROJECT_ID`.
+6. To activate the listing editor, create the first account, copy its UID from **Authentication → Users**, then create `admins/{UID}` in Firestore with `{ "role": "admin" }`. Admin membership is granted by this document and cannot be self-assigned from the site.
 
-To enable accounts on the live site, deploy the included Node server to an application host and connect the website to it using a same-site custom domain/reverse proxy. Configure HTTPS, provider credentials, persistent storage and sessions, and CORS/CSRF policy for that deployment before enabling account actions. Do not point the public site at the local development server.
+The app’s Firebase web config is intentionally blank until project setup. With a valid config, authentication, verified-email gating, saved places/events, public verified corrections, and editor-only review use Firebase. User-submitted corrections remain private to the editor. If you switch from the old local Node backend, existing local accounts cannot be migrated with their passwords; users create new Firebase accounts.
 
-## Run the full app locally
+Firebase Spark has usage limits and may stop serving requests when quotas are exceeded. Confirm current limits and suitability before launch. Vercel’s free Hobby plan is limited to personal, non-commercial use, so it is not the deployment target for this marketplace.
 
-Requires Node.js 20 or newer. From this folder, run:
+## Restaurant links
 
-```sh
-npm start
-```
+When a direct menu or website could not be verified, the app now links to a location-specific Google Maps business profile instead of a broad search page. Restaurant-provided or source-confirmed links remain direct. Hours are presented as unconfirmed when the available sources only show delivery schedules or disagree.
 
-Then open <http://127.0.0.1:4173>.
+## Account security and provider setup
 
-## Configure email verification and Google sign-in
+- Passwords are one-way hashed with a per-account salt using Node scrypt; raw passwords are never written to the data store. New hashes use scrypt N=2^17, r=8, p=1. Legacy hashes are upgraded after a successful login.
+- Email signup is unverified until a single-use, expiring link is used. Verification tokens are stored as SHA-256 hashes.
+- Google uses the server-side authorization-code flow with state, nonce, PKCE, and verified ID-token signature and claim checks. The Google client secret stays server-side.
+- Sessions use random HttpOnly, SameSite cookies. Production cookies require HTTPS (`NODE_ENV=production`).
+- Data is stored locally in `data/store.json` with restrictive file permissions. The local server binds to loopback.
 
-Copy `.env.example` to `.env` and fill in the values locally. Never commit `.env` or share its secrets in chat.
+To enable actual verification emails, configure a verified sender and API key in Resend. To enable Google sign-in, create a Google OAuth Web application client and register `http://localhost:4173/auth/google/callback`. Copy `.env.example` to `.env`, then fill in `RESEND_API_KEY`, `EMAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `APP_BASE_URL`. Keep `.env` private and restart the server. The app reports provider readiness in the sign-up screen. No credentials are included in this project.
 
-- Email verification uses a verified Resend sender (`RESEND_API_KEY`, `EMAIL_FROM`). New email/password accounts cannot log in until they verify.
-- Google sign-in uses a Google OAuth Web application (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`). Register the exact callback `http://localhost:4173/auth/google/callback` for local development.
-- `APP_BASE_URL` must match the app's public HTTPS origin when deployed.
+With the Node backend, suggestions are stored for review in each restaurant’s “Site editor” panel. Set a long random `REPORTS_ADMIN_TOKEN` in the server environment and enter it there. The editor can verify suggestions, publish corrected address/hours/website/menu details, or decline them. GitHub Pages cannot run this server; on the static page, the report form opens a prefilled GitHub issue draft, which a visitor can sign in and submit. Deploy the backend and connect the app to it for in-app review and publishing.
 
-The app reports when either provider is not configured; it does not claim an email was sent or a Google sign-in completed without the provider credentials.
+Accounts created before verification was implemented can continue to sign in but are clearly marked unverified; they can request verification once email delivery is configured. New email/password accounts must verify before login. Google sign-in verifies the Google email claim.
 
-## Security notes
+This local prototype is not ready for public deployment. Before launch, add a production database, durable sessions, HTTPS, account recovery, monitoring, stronger distributed rate limiting, privacy/legal review, and a security review. A server operator can change application code; password hashing protects stored data but cannot technically prevent a malicious operator from changing code to capture passwords. For a stronger operator boundary, use a trusted identity provider to handle passwords.
 
-Passwords are stored as salted one-way scrypt hashes; raw passwords are never written to the data store. New hashes use scrypt N=2^17, r=8, p=1. Legacy hashes are upgraded after successful login. Verification tokens are single-use, expire after 24 hours, and are stored as hashes. Google uses the server-side authorization-code flow with state, nonce, PKCE, and ID-token signature and claim checks. Sessions use random HttpOnly, SameSite cookies.
+## Marketplace gaps
 
-Existing accounts created before verification was implemented can continue to sign in but are marked unverified; they can request verification when email delivery is configured. New email/password accounts must verify before login. Google sign-in verifies Google's email claim.
+Live table availability and confirmed reservations need restaurant booking integrations. Ticket inventory, checkout, refunds, and transfer rules need event organizer or ticketing-provider integrations. The public directory cannot confirm current hours, availability, or ticket stock; event listings link to official information when the source provides a URL.
 
-The local server binds to loopback and is for prototyping. Before public launch, add a production database, durable sessions, HTTPS, account recovery, distributed rate limiting, monitoring, privacy/legal review, and an independent security review. A server operator can change application code; hashing protects stored password data but cannot technically prevent a malicious operator from changing code to capture passwords. For that trust boundary, use a reputable identity provider to handle passwords.
+## Data source and updates
 
-## Marketplace integrations still needed
-
-Live table availability and confirmed reservations require restaurant booking integrations. Ticket inventory, checkout, refunds, and transfer rules require event organizer or ticketing-provider integrations. The public directory cannot confirm current hours, availability, or ticket stock; event listings link to official information where the source provides a URL.
-
-## Data source
-
-City of Edmonton Open Data. Dining listings come from business licence records, which do not publish phone numbers or hours.
-
-## Updating the data
-
-Dining data: `data.edmonton.ca/resource/qhi4-bdpu.json`. Events: `data.edmonton.ca/resource/64u3-c7bh.json`. The records are in `data.js`; update the `DINING`, `EVENTS`, and `SEED_DATE` constants. Data in this repo was seeded in October 2026.
+Dining listings come from City of Edmonton business licence records, which do not publish phone numbers or hours. Event listings link to official information when the source provides a URL. Dining data is in `data.js` from `data.edmonton.ca/resource/qhi4-bdpu.json`; events are from `data.edmonton.ca/resource/64u3-c7bh.json`. Update the `DINING`, `EVENTS`, and `SEED_DATE` constants when refreshing the dataset. Data in this repository was seeded in October 2026.
 
 ## Live page
 
-https://kishoresaketi.github.io/edmonton-discovery/
+GitHub Pages: <https://kishoresaketi.github.io/edmonton-discovery/>

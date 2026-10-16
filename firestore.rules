@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function admin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+    }
+    function validOverride() {
+      return request.resource.data.keys().hasOnly(['address','hours','website','menuUrl','businessStatus','verifiedAt'])
+        && (!('address' in request.resource.data) || (request.resource.data.address is string && request.resource.data.address.size() <= 500))
+        && (!('hours' in request.resource.data) || (request.resource.data.hours is string && request.resource.data.hours.size() <= 500))
+        && (!('website' in request.resource.data) || (request.resource.data.website is string && request.resource.data.website.size() <= 500))
+        && (!('menuUrl' in request.resource.data) || (request.resource.data.menuUrl is string && request.resource.data.menuUrl.size() <= 500))
+        && (!('businessStatus' in request.resource.data) || (request.resource.data.businessStatus is string && request.resource.data.businessStatus.size() <= 500))
+        && request.resource.data.verifiedAt == request.time;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'email', 'createdAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80
+        && request.resource.data.email == request.auth.token.email;
+      allow delete: if false;
+
+      match /savedPlaces/{placeId} {
+        allow read, write: if verified() && request.auth.uid == uid;
+      }
+      match /savedEvents/{eventId} {
+        allow read, write: if verified() && request.auth.uid == uid;
+      }
+    }
+
+    match /placeReports/{reportId} {
+      allow create: if verified()
+        && request.resource.data.keys().hasOnly(['placeId','placeName','field','note','status','createdAt','reporterUid'])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.placeId is int
+        && request.resource.data.placeName is string && request.resource.data.placeName.size() <= 120
+        && request.resource.data.field in ['Address','Opening hours','Website','Menu','Business status','Other']
+        && request.resource.data.note is string && request.resource.data.note.size() >= 8 && request.resource.data.note.size() <= 1000
+        && request.resource.data.createdAt == request.time;
+      allow read: if admin();
+      allow update: if admin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt'])
+        && request.resource.data.status in ['reviewed','resolved','declined']
+        && request.resource.data.reviewedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /placeOverrides/{placeId} {
+      allow read: if true;
+      allow create, update: if admin() && validOverride();
+      allow delete: if admin();
+    }
+
+    match /admins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+  }
+}

@@ -124,7 +124,7 @@
         <p class="modal-kicker">YOUR EDMONTON, IN ONE PLACE</p>
         <h2 id="accountTitle">Create your Edmonton account.</h2>
         <p class="modal-intro">Save your local favourites and keep your next night out in one place. Your account is free.</p>
-        <div class="backend-notice" id="backendNotice" hidden>Account services are not connected to this hosted page yet. Browse dining and events now; signup, sign-in, verification, and saved lists will turn on when the app server is deployed.</div>
+        <div class="backend-notice" id="backendNotice" hidden>Account services are not connected yet. The site owner needs to finish the secure hosting setup before signup, sign-in, saved lists, and correction review are available.</div>
         <div class="auth-modes" id="authModes" role="tablist" aria-label="Account access">
           <button type="button" class="auth-mode active" id="authSignup" role="tab" aria-selected="true">Create account</button>
           <button type="button" class="auth-mode" id="authLogin" role="tab" aria-selected="false">Log in</button>
@@ -147,7 +147,7 @@
         <div class="account-summary" id="accountSummary" hidden></div>
         <button class="resend-button account-verify" id="verifyExisting" type="button" hidden>Send me a verification email</button>
         <button class="signout-button" id="signOut" type="button" hidden>Sign out</button>
-        <p class="demo-note" id="accountNotice">Local prototype: use a unique test password. Use HTTPS and configure production security before public launch.</p>
+        <p class="demo-note" id="accountNotice">Use a unique password. Accounts use managed sign-in when the hosted service is configured.</p>
         <p class="account-message" id="accountMessage" aria-live="polite"></p>
       </section>
     </div>
@@ -170,10 +170,10 @@
             <span class="info-icon" aria-hidden="true">◷</span><span><strong>Hours &amp; open status</strong><small>Check today’s hours on Google Maps</small></span><span class="info-arrow" aria-hidden="true">↗</span>
           </a>
           <a class="place-info-card menu-card" id="dMenu" href="#" target="_blank" rel="noopener">
-            <span class="info-icon" aria-hidden="true">♨</span><span><strong>Find the menu</strong><small>Search for the latest menu</small></span><span class="info-arrow" aria-hidden="true">↗</span>
+            <span class="info-icon" aria-hidden="true">♨</span><span><strong>Menu on business profile</strong><small>Check this location’s menu, if listed</small></span><span class="info-arrow" aria-hidden="true">↗</span>
           </a>
           <a class="place-info-card website-card" id="dWebsite" href="#" target="_blank" rel="noopener">
-            <span class="info-icon" aria-hidden="true">↗</span><span><strong>Restaurant website</strong><small>Find the official website</small></span><span class="info-arrow" aria-hidden="true">↗</span>
+            <span class="info-icon" aria-hidden="true">↗</span><span><strong>Website &amp; details</strong><small>Open this location’s business profile</small></span><span class="info-arrow" aria-hidden="true">↗</span>
           </a>
         </div>
         <p class="place-info-note" id="placeInfoNote">Hours and menus can change. Please confirm details with the restaurant before heading out.</p>
@@ -184,14 +184,14 @@
           <label for="reportField">What needs a correction?</label>
           <select id="reportField" required><option value="">Choose a detail</option><option>Address</option><option>Opening hours</option><option>Website</option><option>Menu</option><option>Business status</option><option>Other</option></select>
           <label for="reportNote">What should we check?</label>
-          <textarea id="reportNote" rows="3" maxlength="1000" required placeholder="Tell us what looks wrong and, if you know it, the correct information."></textarea>
+          <textarea id="reportNote" rows="3" minlength="8" maxlength="1000" required placeholder="Tell us what looks wrong and, if you know it, the correct information."></textarea>
           <button class="btn primary" type="submit">Send suggestion</button>
           <p id="reportMessage" class="report-message" aria-live="polite"></p>
         </form>
       </details>
-      <details class="review-admin" id="reviewAdmin">
+      <details class="review-admin" id="reviewAdmin" hidden>
         <summary>Site editor: review suggestions</summary>
-        <div class="review-controls"><label for="reviewToken">Editor access key</label><input id="reviewToken" type="password" autocomplete="off"><button class="btn secondary" id="loadReports" type="button">Load reports</button></div>
+        <div class="review-controls"><label class="review-token-required" for="reviewToken">Editor access key</label><input class="review-token-required" id="reviewToken" type="password" autocomplete="off"><button class="btn secondary" id="loadReports" type="button">Load reports</button></div>
         <div id="reviewList" class="review-list" aria-live="polite"></div>
       </details>
       <div class="mapwrap" id="mapWrap" hidden><iframe id="dMap" title="Map of this location" loading="lazy"></iframe></div>
@@ -206,6 +206,11 @@
     </section>
 
 
+    <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firebase-backend.js"></script>
     <script src="data.js"></script>
     <script src="app.js"></script>
   </body>
