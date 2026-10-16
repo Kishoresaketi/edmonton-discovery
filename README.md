@@ -6,20 +6,21 @@ An Edmonton-first dining and event discovery app. Browsing and the Edmonton Memb
 
 Requires Node.js 20 or newer. From this folder, run `npm start`, then open <http://127.0.0.1:4173>.
 
-## Production backend (Firebase Spark)
+## Hosting and backend
 
-The static GitHub Pages copy does not run the Node server in this repository. For a hosted version with real sign-up, Google sign-in, saved lists, and correction review, use Firebase Authentication + Cloud Firestore + Firebase Hosting. Firebase Auth handles password storage and email verification; this app never receives or stores password hashes. Keep Firebase Security Rules deployed before sharing the site.
+Vercel serves the website from this repository. Firebase Authentication and Cloud Firestore provide the account and data backend; Firebase Auth handles password storage and email verification, and this app never stores passwords. The local Node server is only for local development and is excluded from Vercel deployments.
 
 1. Create a Firebase project on the **Spark** (no-cost) plan. Choose a Firestore location close to Edmonton (for example, `northamerica-northeast1`); Firestore’s location cannot be changed later.
-2. In **Authentication → Sign-in method**, enable **Email/Password** and **Google**. In **Authentication → Settings → Authorized domains**, add the Firebase Hosting domain and any custom domain you use.
+2. In **Authentication → Sign-in method**, enable **Email/Password** and **Google**. In **Authentication → Settings → Authorized domains**, add the Vercel domain after the first deployment and any custom domain you use.
 3. Create the Firestore database in production mode.
 4. Register a web app in **Project settings → Your apps**. Copy its web configuration into `firebase-config.js` (`apiKey`, `authDomain`, `projectId`, and `appId`). This web configuration is public by design; never put a service-account key or admin credential in the website.
-5. From this folder, install the Firebase CLI if needed (`npm install --global firebase-tools`), sign in (`firebase login`), and deploy hosting and the included Firestore rules: `firebase deploy --only hosting,firestore:rules --project YOUR_PROJECT_ID`.
-6. To activate the listing editor, create the first account, copy its UID from **Authentication → Users**, then create `admins/{UID}` in Firestore with `{ "role": "admin" }`. Admin membership is granted by this document and cannot be self-assigned from the site.
+5. Import `KishoreSaketi/edmonton-discovery` from the Vercel dashboard. Use the repository root, **Other** framework preset, no build command, and `.` as the output directory. The checked-in `vercel.json` configures this static deployment and response headers.
+6. After adding the Vercel domain under Firebase Authentication’s **Authorized domains**, deploy the Firestore rules from this folder with the Firebase CLI: `firebase deploy --only firestore:rules --project YOUR_PROJECT_ID`.
+7. To activate the listing editor, create the first account, copy its UID from **Authentication → Users**, then create `admins/{UID}` in Firestore with `{ "role": "admin" }`. Admin membership is granted by this document and cannot be self-assigned from the site.
 
 The app’s Firebase web config is intentionally blank until project setup. With a valid config, authentication, verified-email gating, saved places/events, public verified corrections, and editor-only review use Firebase. User-submitted corrections remain private to the editor. If you switch from the old local Node backend, existing local accounts cannot be migrated with their passwords; users create new Firebase accounts.
 
-Firebase Spark has usage limits and may stop serving requests when quotas are exceeded. Confirm current limits and suitability before launch. Vercel’s free Hobby plan is limited to personal, non-commercial use, so it is not the deployment target for this marketplace.
+Firebase Spark has usage limits and may stop serving requests when quotas are exceeded. Vercel’s free Hobby plan is limited to personal, non-commercial use; this marketplace will need a Vercel Pro or other eligible plan for commercial operation. Do not enter billing details or start a paid plan without reviewing the current price and usage settings.
 
 ## Restaurant links
 
@@ -35,11 +36,11 @@ When a direct menu or website could not be verified, the app now links to a loca
 
 To enable actual verification emails, configure a verified sender and API key in Resend. To enable Google sign-in, create a Google OAuth Web application client and register `http://localhost:4173/auth/google/callback`. Copy `.env.example` to `.env`, then fill in `RESEND_API_KEY`, `EMAIL_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `APP_BASE_URL`. Keep `.env` private and restart the server. The app reports provider readiness in the sign-up screen. No credentials are included in this project.
 
-With the Node backend, suggestions are stored for review in each restaurant’s “Site editor” panel. Set a long random `REPORTS_ADMIN_TOKEN` in the server environment and enter it there. The editor can verify suggestions, publish corrected address/hours/website/menu details, or decline them. GitHub Pages cannot run this server; on the static page, the report form opens a prefilled GitHub issue draft, which a visitor can sign in and submit. Deploy the backend and connect the app to it for in-app review and publishing.
+With the local Node backend, suggestions are stored for review in each restaurant’s “Site editor” panel using `REPORTS_ADMIN_TOKEN`. In the Firebase backend, verified visitors submit suggestions to Firestore and only the account listed in `admins/{UID}` can review or publish them. GitHub Pages cannot run the Node server; without Firebase configuration, its report form opens a prefilled GitHub issue draft.
 
 Accounts created before verification was implemented can continue to sign in but are clearly marked unverified; they can request verification once email delivery is configured. New email/password accounts must verify before login. Google sign-in verifies the Google email claim.
 
-This local prototype is not ready for public deployment. Before launch, add a production database, durable sessions, HTTPS, account recovery, monitoring, stronger distributed rate limiting, privacy/legal review, and a security review. A server operator can change application code; password hashing protects stored data but cannot technically prevent a malicious operator from changing code to capture passwords. For a stronger operator boundary, use a trusted identity provider to handle passwords.
+Before public launch, add account recovery, monitoring, distributed rate limiting, privacy/legal review, and an independent security review. Firebase Auth handles passwords, but the app operator can still change website code; restrict GitHub/Vercel deployment access and review changes carefully.
 
 ## Marketplace gaps
 
